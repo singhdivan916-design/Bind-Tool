@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garena Account Security Tool | Free Fire Bind Manager</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Free Fire Account Security Tool</h1>
+            <p>Professional Free Fire Bind Manager</p>
+        <div class="credits">
+                <span>👨‍💻 @FireXDecoder</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- Card 1: Add Recovery Email -->
+            <div class="card">
+                <h3>📧 Add Recovery Email</h3>
+                <input type="email" id="addEmail" placeholder="Recovery Email" autocomplete="off">
+                <input type="text" id="addToken" placeholder="Access Token" autocomplete="new-password">
+                <div id="addStep" class="step-group">
+                    <button onclick="sendOTP()" id="sendOtpBtn">Send OTP</button>
+                    <div id="otpSection" style="display:none;">
+                        <input type="text" id="otpCode" placeholder="Enter OTP" autocomplete="off">
+                        <button onclick="bindEmail()">Verify & Bind</button>
+                        <button onclick="resetAdd()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Check Recovery Email -->
+            <div class="card">
+                <h3>🔍 Check Recovery Email</h3>
+                <input type="text" id="checkToken" placeholder="Access Token" autocomplete="new-password">
+                <button onclick="checkRecovery()">Check</button>
+                <div id="checkResult" class="result" style="white-space: pre-wrap; font-family: monospace;"></div>
+            </div>
+
+            <!-- Card 3: Linked Platforms -->
+            <div class="card">
+                <h3>🔗 Linked Platforms</h3>
+                <input type="text" id="platformsToken" placeholder="Access Token" autocomplete="new-password">
+                <button onclick="checkPlatforms()">Get Platforms</button>
+                <pre id="platformsResult" class="result"></pre>
+            </div>
+
+            <!-- Card 4: Cancel Recovery Email -->
+            <div class="card">
+                <h3>❌ Cancel Recovery Email</h3>
+                <input type="text" id="cancelToken" placeholder="Access Token" autocomplete="new-password">
+                <button onclick="cancelRequest()">Cancel</button>
+            </div>
+
+            <!-- Card 5: Unbind Email -->
+            <div class="card">
+                <h3>🔓 Unbind Email</h3>
+                <input type="email" id="unbindEmail" placeholder="Linked Email" autocomplete="off">
+                <input type="text" id="unbindToken" placeholder="Access Token" autocomplete="new-password">
+                <select id="unbindMethod">
+                    <option value="otp">OTP Method</option>
+                    <option value="password">Secondary Password</option>
+                </select>
+                <div id="unbindDynamic"></div>
+                <button onclick="verifyUnbind()">Verify & Unbind</button>
+            </div>
+
+            <!-- Card 6: Change Bind Email -->
+            <div class="card">
+                <h3>🔄 Change Bind Email</h3>
+                <input type="email" id="oldEmail" placeholder="Current Email" autocomplete="off">
+                <input type="email" id="newEmail" placeholder="New Email" autocomplete="off">
+                <input type="text" id="changeToken" placeholder="Access Token" autocomplete="new-password">
+                <select id="changeMethod">
+                    <option value="otp">OTP Method</option>
+                    <option value="password">Secondary Password</option>
+                </select>
+                <div id="changeDynamic"></div>
+                <button onclick="startChange()">Start Change</button>
+            </div>
+
+            <!-- Card 7: Revoke Token -->
+            <div class="card">
+                <h3>🔑 Revoke Access Token</h3>
+                <input type="text" id="revokeToken" placeholder="Access Token" autocomplete="new-password">
+                <button onclick="revokeToken()">Revoke</button>
+            </div>
+        </div>
+
+        <footer>
+            <p>⚠️ Educational & account management purposes only.</p>
+            <p>© 2026 Free Fire Account Security Tool</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
